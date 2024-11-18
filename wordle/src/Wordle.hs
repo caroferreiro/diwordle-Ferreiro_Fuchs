@@ -1,9 +1,14 @@
 module Wordle (
   Juego,
+  objetivo, 
+  maxIntentos,
   Estado(..),
   nuevo,
-  estadoActual,
-  intentosDisponibles
+  longitudObjetivo,
+  estadoJuego,
+  obtenerIntentos,
+  intentosDisponibles,
+  realizarIntento
 )
   where
 
@@ -30,8 +35,14 @@ nuevo target intentosTotales = Juego target intentosTotales [] EnProgreso
 longitudObjetivo :: String -> Int
 longitudObjetivo target = length target
 
+obtenerIntentos :: Juego -> [String]
+obtenerIntentos j = intentos j
+
 intentosDisponibles :: Juego -> Int
 intentosDisponibles j = maxIntentos j - length (intentos j)
+
+estadoJuego :: Juego -> Estado
+estadoJuego = estado
 
 validarIntento :: Juego -> String -> Either String String
 validarIntento j intento
@@ -47,12 +58,12 @@ realizarIntento j intento =
     Left err -> Left err
     Right intentoValido -> 
       let resultado = match (objetivo j) intentoValido 
-          nuevoEstado = estadoActual j resultado
+          nuevoEstado = actualizarEstado j resultado
           j' = j {intentos = intentoValido : intentos j, estado = nuevoEstado}
       in Right j'
 
-estadoActual :: Juego -> [(Char, Match)] -> Estado
-estadoActual j resultadoIntento 
+actualizarEstado :: Juego -> [(Char, Match)] -> Estado
+actualizarEstado j resultadoIntento 
     | all (\x -> snd x == Correcto) resultadoIntento = Ganó
     | intentosDisponibles j == 0 = Perdió
     | otherwise = EnProgreso
