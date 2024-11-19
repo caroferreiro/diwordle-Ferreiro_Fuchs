@@ -20,16 +20,14 @@ data State = State
         finalizar :: Bool
     }
 
+getDiccionario :: FilePath -> IO [String]
+getDiccionario archivo = do
+    diccionario <- readFile archivo
+    let palabras = lines diccionario
+    return palabras
 
-main :: IO ()
-main = do
-    args <- getArgs
-    let target = if null args then "HORQUILLA" else map toUpper (head args)
-    let intentosTotales = 6
-    runInteractive (jugar target intentosTotales)
-
-jugar :: String -> Int -> Sandbox State
-jugar target intentosTotales =
+jugar :: String -> Int -> (String -> Bool) -> Sandbox State
+jugar target intentosTotales validarPalabra =
     Sandbox
       {
         initialize = 
@@ -48,9 +46,9 @@ jugar target intentosTotales =
               else mensajeError s,
             " ",
             "Palabra secreta: " ++  replicate (longitudObjetivo target) '*',
+            "Intento actual: " ++ intentoActual s,
             "Jugar:",
             unlines (map (`renderIntento` s) (obtenerIntentos (juego s))),
-            "Intento actual: " ++ intentoActual s,
             "Intentos restantes: " ++ show (intentosDisponibles (juego s)),
             " ",
             case estadoJuego (juego s) of
@@ -65,7 +63,7 @@ jugar target intentosTotales =
           else case key of
             KEsc -> (s, Exit)
             KEnter -> 
-                let nuevoEstado = procesarIntento s
+                let nuevoEstado = procesarIntento validarPalabra s
                 in if estadoJuego (juego nuevoEstado) /= EnProgreso
                     then (nuevoEstado {finalizar = True}, Continue)
                     else (nuevoEstado, Continue)
@@ -74,19 +72,35 @@ jugar target intentosTotales =
             _ -> (s, Continue)
       }
 
-procesarIntento :: State -> State
-procesarIntento s = 
-    case realizarIntento (juego s) (intentoActual s) of
-        Left err -> s {mensajeError = err, intentoActual = ""} 
-        Right juego' -> s {juego = juego', intentoActual = "", mensajeError = ""}
+procesarIntento :: (String -> Bool) -> State -> State
+procesarIntento validarPalabra s = 
+    let palabra = intentoActual s
+    in if validarPalabra palabra
+        then case realizarIntento (juego s) (intentoActual s) of
+            Left err -> s {mensajeError = err, intentoActual = ""} 
+            Right juego' -> s {juego = juego', intentoActual = "", mensajeError = ""}
+        else s {mensajeError = "Palabra inválida", intentoActual = ""}
 
 renderIntento :: String -> State -> String
 renderIntento intento s = 
     let renderizado = map renderLetra (match (objetivo (juego s)) intento) -- map renderLetra: aplica renderLetra a cada (Char, Match) que devuelve match
-        casillas = concat renderizado
-    in "+---+---+---+---+---+" ++ "\n" ++ casillas
+        letras = concat renderizado
+        cantCasillas = longitudObjetivo (objetivo (juego s))
+        casillas = concatMap (const "+---") [0..cantCasillas]
+    in casillas ++ "+" ++ "\n" ++ letras
 
 renderLetra :: (Char, Match) -> String
 renderLetra (c, Correcto) = ansiResetColor ++ "| " ++ ansiBgGreenColor ++ [c] ++ ansiResetColor ++ " |"   -- Letra correcta y en la posición correcta
 renderLetra (c, LugarIncorrecto) = ansiResetColor ++ "| " ++ ansiBgYellowColor ++ [c] ++ ansiResetColor ++ " |"   -- Letra correcta en posición incorrecta
 renderLetra (c, NoPertenece) = ansiResetColor ++ "| " ++ ansiBgRedColor ++ [c] ++ ansiResetColor ++ " |"  -- Letra incorrectaaa
+
+
+
+main :: IO ()
+main = do
+    args <- getArgs
+    diccionario <- getDiccionario "diccionario.txt"
+    let target = if null args then "HORQUILLA" else map toUpper (head args)
+    let intentosTotales = 6
+    let validarPalabra palabra = elem (map toUpper palabra) diccionario
+    runInteractive (jugar target intentosTotales validarPalabra)
