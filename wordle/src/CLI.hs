@@ -5,6 +5,7 @@ import System.Environment (getArgs)
 import Core (Match(..), match)
 import Wordle (Juego, Estado(..), objetivo, longitudObjetivo, realizarIntento, nuevo, estadoJuego, obtenerIntentos, intentosDisponibles)
 import Data.Char (toUpper)
+import System.Random.Stateful (uniformRM, globalStdGen)
 
 ansiResetColor, ansiBgYellowColor, ansiBgGreenColor, ansiBgRedColor :: String
 ansiResetColor = "\ESC[39m\ESC[49m"
@@ -100,7 +101,8 @@ main :: IO ()
 main = do
     args <- getArgs
     diccionario <- getDiccionario "diccionario.txt"
-    let target = if null args then "HORQUILLA" else map toUpper (head args)
+    idx <- uniformRM (0, length diccionario - 1) globalStdGen
+    let target = if null args then diccionario !! idx else map toUpper (head args)
     let intentosTotales = 6
     let validarPalabra palabra = elem (map toUpper palabra) diccionario
     runInteractive (jugar target intentosTotales validarPalabra)
