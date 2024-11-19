@@ -24,7 +24,7 @@ data State = State
 main :: IO ()
 main = do
     args <- getArgs
-    let target = if null args then "HORQUILLA" else map toUpper (head args)
+    let target = if null args then "HORQUILLA" else head args 
     let intentosTotales = 6
     runInteractive (jugar target intentosTotales)
 
@@ -48,8 +48,8 @@ jugar target intentosTotales =
               else mensajeError s,
             " ",
             "Palabra secreta: " ++  replicate (longitudObjetivo target) '*',
-            "Jugar:",
-            unlines (map (`renderIntento` s) (obtenerIntentos (juego s))),
+            "Juego:",
+            unlines (generarGrilla (longitudObjetivo (objetivo (juego s))) (intentosDisponibles (juego s)) (obtenerIntentos (juego s))),
             "Intento actual: " ++ intentoActual s,
             "Intentos restantes: " ++ show (intentosDisponibles (juego s)),
             " ",
@@ -80,13 +80,36 @@ procesarIntento s =
         Left err -> s {mensajeError = err, intentoActual = ""} 
         Right juego' -> s {juego = juego', intentoActual = "", mensajeError = ""}
 
-renderIntento :: String -> State -> String
-renderIntento intento s = 
-    let renderizado = map renderLetra (match (objetivo (juego s)) intento) -- map renderLetra: aplica renderLetra a cada (Char, Match) que devuelve match
-        casillas = concat renderizado
-    in "+---+---+---+---+---+" ++ "\n" ++ casillas
+-- renderIntento :: String -> State -> String
+-- renderIntento intento s = 
+--     let renderizado = map renderLetra (match (objetivo (juego s)) intento) -- map renderLetra: aplica renderLetra a cada (Char, Match) que devuelve match
+--         casillas = concat renderizado
+--     in casillas
 
-renderLetra :: (Char, Match) -> String
-renderLetra (c, Correcto) = ansiResetColor ++ "| " ++ ansiBgGreenColor ++ [c] ++ ansiResetColor ++ " |"   -- Letra correcta y en la posición correcta
-renderLetra (c, LugarIncorrecto) = ansiResetColor ++ "| " ++ ansiBgYellowColor ++ [c] ++ ansiResetColor ++ " |"   -- Letra correcta en posición incorrecta
-renderLetra (c, NoPertenece) = ansiResetColor ++ "| " ++ ansiBgRedColor ++ [c] ++ ansiResetColor ++ " |"  -- Letra incorrectaaa
+-- renderLetra :: (Char, Match) -> String
+-- renderLetra (c, Correcto) = ansiBgGreenColor ++ [c] ++ ansiResetColor   -- Letra correcta y en la posición correcta
+-- renderLetra (c, LugarIncorrecto) = ansiBgYellowColor ++ [c] ++ ansiResetColor   -- Letra correcta en posición incorrecta
+-- renderLetra (c, NoPertenece) = ansiBgRedColor ++ [c] ++ ansiResetColor  -- Letra incorrectaaa
+
+generarGrilla :: Int -> Int -> [String] -> [String]
+generarGrilla ancho altura intentos =
+    let grillaVacia = replicate (altura - length intentos) (generarGrillaVacia ancho)
+        grillaConIntentos = map (`renderIntento` ancho) intentos
+    in grillaVacia ++ grillaConIntentos
+
+generarGrillaVacia :: Int -> String
+generarGrillaVacia ancho = 
+    let casillas = replicate ancho "| "
+        fila = concat casillas ++ " |"
+        separador = concat (replicate ancho "+--") ++ "+"
+    in separador ++ "\n" ++ fila ++ "\n" ++ separador
+
+renderIntento :: String -> Int -> String
+renderIntento intento ancho = 
+    let casillas = map renderLetra intento
+        fila = concat casillas ++ replicate (ancho - length intento) '|'
+        separador = concat (replicate ancho "+--") ++ "+"
+    in separador ++ "\n" ++ fila ++ "\n" ++ separador
+
+renderLetra :: Char -> String
+renderLetra c = "| " ++ [c] ++ " "

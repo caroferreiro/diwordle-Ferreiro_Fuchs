@@ -59,7 +59,7 @@ realizarIntento j intento =
     Right intentoValido -> 
       let resultado = match (objetivo j) intentoValido 
           nuevoEstado = actualizarEstado j resultado
-          j' = j {intentos = intentoValido : intentos j, estado = nuevoEstado}
+          j' = j {intentos = intentos j ++ [intentoValido], estado = nuevoEstado}
       in Right j'
 
 actualizarEstado :: Juego -> [(Char, Match)] -> Estado
