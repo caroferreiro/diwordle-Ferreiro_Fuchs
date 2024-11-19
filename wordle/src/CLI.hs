@@ -15,18 +15,17 @@ ansiBgRedColor = "\ESC[41m"
 data State = State
     {
         juego :: Juego,
-        intentoActual :: String
+        intentoActual :: String,
+        mensajeError :: String
     }
 
 
 main :: IO ()
 main = do
-    putStrLn "¡Bienvenido a Wordle App!"
     args <- getArgs
     let target = if null args then "HORQUILLA" else head args 
     let intentosTotales = 6
     runInteractive (jugar target intentosTotales)
-
 
 jugar :: String -> Int -> Sandbox State
 jugar target intentosTotales =
@@ -36,16 +35,22 @@ jugar target intentosTotales =
           State
             {
               juego = nuevo target intentosTotales,
-              intentoActual = ""
+              intentoActual = "",
+              mensajeError = ""
             },
             
         render = \s -> unlines
           [  
-            "Palabra secreta: " ++  replicate (longitudObjetivo (objetivo (juego s))) '*',
+            if null (obtenerIntentos (juego s)) && intentoActual s == "" && mensajeError s == ""
+              then "¡Bienvenido a Wordle App!"
+              else mensajeError s,
+            " ",
+            "Palabra secreta: " ++  replicate (longitudObjetivo target) '*',
             "Intentos realizados:",
             unlines (map (`renderIntento` s) (obtenerIntentos (juego s))),
             "Intento actual: " ++ intentoActual s,
             "Intentos restantes: " ++ show (intentosDisponibles (juego s)),
+            " ",
             case estadoJuego (juego s) of
                 Ganó -> "¡Ganaste!"
                 Perdió -> "Perdiste :("
@@ -68,11 +73,15 @@ jugar target intentosTotales =
 procesarIntento :: State -> State
 procesarIntento s = 
     case realizarIntento (juego s) (intentoActual s) of
-        Left _ -> s {intentoActual = ""}
-        Right juego' -> s {juego = juego', intentoActual = ""}
+        Left err -> s {mensajeError = err, intentoActual = ""} 
+        Right juego' -> s {juego = juego', intentoActual = "", mensajeError = ""}
 
 renderIntento :: String -> State -> String
-renderIntento intento s = concatMap renderLetra (match (objetivo (juego s)) intento)
+renderIntento intento s = 
+    let renderizado = map renderLetra (match (objetivo (juego s)) intento)
+        casillas = map (\c -> "| " ++ c ++ " ") renderizado
+        fila = concat casillas ++ "|"
+    in "+---+---+---+---+---+" ++ "\n" ++ fila ++ "\n" ++ "+---+---+---+---+---+"
 
 renderLetra :: (Char, Match) -> String
 renderLetra (c, Correcto) = ansiBgGreenColor ++ [c] ++ ansiResetColor      -- Letra correcta y en la posición correcta

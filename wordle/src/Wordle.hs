@@ -46,7 +46,7 @@ estadoJuego = estado
 
 validarIntento :: Juego -> String -> Either String String
 validarIntento j intento
-    | length intento /= longitudObjetivo (objetivo j) = Left "Longitud inválida"
+    | length intento /= longitudObjetivo (objetivo j) = Left ("El intento debe tener " ++ show (longitudObjetivo (objetivo j)) ++ " caracteres")
     | not (all esLetraValida intento) = Left "El intento contiene caracteres inválidos"
     | otherwise = Right intento
     where 
@@ -65,5 +65,5 @@ realizarIntento j intento =
 actualizarEstado :: Juego -> [(Char, Match)] -> Estado
 actualizarEstado j resultadoIntento 
     | all (\x -> snd x == Correcto) resultadoIntento = Ganó
-    | intentosDisponibles j == 0 = Perdió
+    | intentosDisponibles j <= 1 = Perdió
     | otherwise = EnProgreso
