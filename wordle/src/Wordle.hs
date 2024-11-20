@@ -33,10 +33,10 @@ nuevo :: String -> Int -> Juego
 nuevo target intentosTotales = Juego target intentosTotales [] EnProgreso
 
 longitudObjetivo :: String -> Int
-longitudObjetivo target = length target
+longitudObjetivo = length
 
 obtenerIntentos :: Juego -> [String]
-obtenerIntentos j = intentos j
+obtenerIntentos = intentos
 
 intentosDisponibles :: Juego -> Int
 intentosDisponibles j = maxIntentos j - length (intentos j)
