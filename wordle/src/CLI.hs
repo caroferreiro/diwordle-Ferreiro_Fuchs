@@ -52,12 +52,13 @@ jugar target intentosTotales validarPalabra =
             "Palabra secreta: " ++  replicate (longitudObjetivo target) '*',
             "Intento actual: " ++ intentoActual s,
             "Jugar:",
+            concatMap (const "+---") [1..longitudObjetivo (objetivo (juego s))] ++ "+",
             unlines (map (`renderIntento` s) (obtenerIntentos (juego s))),
             "Intentos restantes: " ++ show (intentosDisponibles (juego s)),
             " ",
             case estadoJuego (juego s) of
                 Ganó -> "¡Ganaste!"
-                Perdió -> "Perdiste :(" ++ objetivo (juego s)
+                Perdió -> "Perdiste :( La palabra era: " ++ objetivo (juego s)
                 EnProgreso -> ""
           ],
         
@@ -106,13 +107,13 @@ renderIntento intento s =
     let renderizado = map renderLetra (match (objetivo (juego s)) intento) -- map renderLetra: aplica renderLetra a cada (Char, Match) que devuelve match
         letras = concat renderizado
         cantCasillas = longitudObjetivo (objetivo (juego s))
-        casillas = concatMap (const "+---") [0..cantCasillas]
-    in casillas ++ "+" ++ "\n" ++ letras
+        casillas = concatMap (const "+---") [1..cantCasillas]
+    in "| " ++ letras ++ "\n" ++ casillas ++ "+"
 
 renderLetra :: (Char, Match) -> String
-renderLetra (c, Correcto) = ansiResetColor ++ "| " ++ ansiBgGreenColor ++ [c] ++ ansiResetColor ++ " |"   -- Letra correcta y en la posición correcta
-renderLetra (c, LugarIncorrecto) = ansiResetColor ++ "| " ++ ansiBgYellowColor ++ [c] ++ ansiResetColor ++ " |"   -- Letra correcta en posición incorrecta
-renderLetra (c, NoPertenece) = ansiResetColor ++ "| " ++ ansiBgRedColor ++ [c] ++ ansiResetColor ++ " |"  -- Letra incorrectaaa
+renderLetra (c, Correcto) = ansiBgGreenColor ++ [c] ++ ansiResetColor ++ " | "   -- Letra correcta y en la posición correcta
+renderLetra (c, LugarIncorrecto) = ansiBgYellowColor ++ [c] ++ ansiResetColor ++ " | "   -- Letra correcta en posición incorrecta
+renderLetra (c, NoPertenece) = ansiBgRedColor ++ [c] ++ ansiResetColor ++ " | "  -- Letra incorrectaaa
 
 
 
