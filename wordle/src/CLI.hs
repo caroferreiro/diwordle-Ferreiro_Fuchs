@@ -124,5 +124,5 @@ main = do
     idx <- uniformRM (0, length diccionario - 1) globalStdGen
     let target = if null args then diccionario !! idx else map toUpper (head args)
     let intentosTotales = 6
-    let validarPalabra palabra = elem (map toUpper palabra) diccionario
+    let validarPalabra palabra = if null args then elem (map toUpper palabra) diccionario else True
     runInteractive (jugar target intentosTotales validarPalabra)
