@@ -7,6 +7,9 @@ import Wordle (Juego (objetivo), Estado(..), objetivo, longitudObjetivo, realiza
 import Data.Char (toUpper)
 import System.Random.Stateful (uniformRM, globalStdGen)
 import Data.List (intercalate)
+import JuegoDaily (EstadoJuego(..))
+import Data.Time (getCurrentTime, utctDay)
+import Data.Time.Format.ISO8601 (iso8601Show)
 
 ansiResetColor, ansiBgYellowColor, ansiBgGreenColor, ansiBgRedColor :: String
 ansiResetColor = "\ESC[39m\ESC[49m"
@@ -121,8 +124,87 @@ main :: IO ()
 main = do
     args <- getArgs
     diccionario <- getDiccionario "diccionario.txt"
-    idx <- uniformRM (0, length diccionario - 1) globalStdGen
-    let target = if null args then diccionario !! idx else map toUpper (head args)
+    estado <- leerEstado "estado.json"
+    let fechaActual = fmap iso8601Show getCurrentDay
+    let (modo, palabra, fecha) = parseArgs args estado diccionario fechaActual
+    let estadoDiario = case estado of
+                          Just st -> st
+                          Nothing -> EstadoJuego [] fechaActual []
     let intentosTotales = 6
     let validarPalabra palabra = if null args then elem (map toUpper palabra) diccionario else True
-    runInteractive (jugar target intentosTotales validarPalabra)
+    let nuevoEstado = actualizarHistorial estado fecha palabra
+    runInteractive (jugar palabra intentosTotales validarPalabra)
+    guardarIntentos estadoDiario
+
+getCurrentDay :: IO Day
+getCurrentDay = do
+  t <- getCurrentTime
+  tz <- getCurrentTimeZone
+  pure $ localDay (utcToLocalTime tz t)
+
+parseArgs :: [String] -> Maybe EstadoJuego -> [String] -> Day -> (String, String, Day)
+parseArgs args estado diccionario fechaActual =
+    case args of
+      ("--random":_) -> ( "random", obtenerPalabraRandom diccionario, fechaActual)
+      ("--daily":[]) -> obtenerEstadoDaily estado fechaActual diccionario
+      ("--daily":fechaStr:_) -> 
+            case parseDay fechaStr of
+                Just fecha -> ("daily", obtenerPalabraPorFecha estado fecha diccionario, fecha)
+                Nothing -> error "Formato de fecha inválido. Use YYYY-MM-DD."
+      ("--palabra":palabra:_) -> ("palabra", palabra, fechaActual)
+      _ -> obtenerEstadoDaily estado fechaActual diccionario
+
+
+actualizarHistorial :: Maybe EstadoJuego -> Day -> String -> EstadoJuego
+actualizarHistorial (Just estado) fecha palabra =
+    estado { historial = (fecha, palabra) : filter ((/= fecha) . fst) (historial estado) }
+actualizarHistorial Nothing fecha palabra =
+    EstadoJuego { historial = [(fecha, palabra)], intentosDiaActual = [] }      
+
+parseDay :: String -> Maybe Day
+parseDay s = iso8601ParseM s
+
+obtenerPalabraRandom :: [String] -> String
+obtenerPalabraRandom diccionario = do
+    idx <- uniformRM (0, length diccionario - 1) globalStdGen
+    return $ diccionario !! idx
+
+
+obtenerPalabraPorFecha :: Maybe EstadoJuego -> Day -> [String] -> String
+obtenerPalabraPorFecha (Just estado) fecha diccionario =
+    case lookup fecha (historial estado) of
+        Just palabra -> palabra
+        Nothing -> obtenerPalabraRandom diccionario
+obtenerPalabraPorFecha Nothing _ diccionario = obtenerPalabraRandom diccionario
+ 
+insertarPalabra :: Maybe EstadoJuego -> String -> [String] -> EstadoJuego
+insertarPalabra (Just estado) fecha diccionario= 
+  let palabraNueva = obtenerPalabraRandom diccionario
+        in EstadoJuego
+            { historial = (fecha, palabraNueva) : historial estado
+            }
+insertarPalabra Nothing fecha diccionario =
+    let palabraNueva = obtenerPalabraRandom diccionario
+    in EstadoJuego
+        { historial = [(fecha, palabraNueva)]
+        }
+
+
+obtenerEstadoDaily :: Maybe EstadoJuego -> Day -> [String] -> (String, String, Day)
+obtenerEstadoDaily (Just estado) fechaActual diccionario =
+    case lookup fechaActual (historial estado) of
+        Just palabra -> ("daily", palabra, fechaActual)
+        Nothing ->
+            let palabraNueva = obtenerPalabraRandom diccionario
+            in ("daily", palabraNueva, fechaActual)
+obtenerEstadoDaily Nothing fechaActual diccionario =
+    let palabraNueva = obtenerPalabraRandom diccionario
+    in ("daily", palabraNueva, fechaActual)
+
+actualizarIntentos :: EstadoJuego -> String -> EstadoJuego
+actualizarIntentos estado intento = 
+    estado { intentosDiaActual = intento : intentosDiaActual estado }
+
+guardarIntentos :: EstadoJuego -> IO ()
+guardarIntentos estado = do
+    guardarEstado "estado.json" estado
