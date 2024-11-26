@@ -4,6 +4,7 @@ module Wordle (
   maxIntentos,
   Estado(..),
   nuevo,
+  empezado,
   longitudObjetivo,
   estadoJuego,
   obtenerIntentos,
@@ -31,6 +32,9 @@ data Estado
 
 nuevo :: String -> Int -> Juego
 nuevo target intentosTotales = Juego target intentosTotales [] EnProgreso
+
+empezado :: String -> Int -> [String] -> Juego
+empezado target intentosRestantes intentosRealizados = Juego target intentosRestantes intentosRealizados EnProgreso
 
 longitudObjetivo :: String -> Int
 longitudObjetivo = length
