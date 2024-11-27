@@ -4,7 +4,6 @@ module Wordle (
   maxIntentos,
   Estado(..),
   nuevo,
-  empezado,
   longitudObjetivo,
   estadoJuego,
   obtenerIntentos,
@@ -20,9 +19,9 @@ data Juego = Juego
     objetivo :: String,
     maxIntentos :: Int,
     intentos :: [String],
-    estado :: Estado
+    estado :: Estado,
+    validarPalabra :: String -> Bool
   }
-  deriving (Show)
 
 data Estado
     = EnProgreso
@@ -30,11 +29,11 @@ data Estado
     | Perdió
     deriving (Eq, Show)
 
-nuevo :: String -> Int -> Juego
-nuevo target intentosTotales = Juego target intentosTotales [] EnProgreso
+nuevo :: String -> Int -> (String -> Bool) -> Juego
+nuevo target intentosTotales diccionario = Juego target intentosTotales [] EnProgreso diccionario
 
-empezado :: String -> Int -> [String] -> Juego
-empezado target intentosRestantes intentosRealizados = Juego target intentosRestantes intentosRealizados EnProgreso
+-- empezado :: String -> Int -> [String] -> Juego
+-- empezado target intentosRestantes intentosRealizados = Juego target intentosRestantes intentosRealizados EnProgreso
 
 longitudObjetivo :: String -> Int
 longitudObjetivo = length
@@ -52,6 +51,7 @@ validarIntento :: Juego -> String -> Either String String
 validarIntento j intento
     | length intento /= longitudObjetivo (objetivo j) = Left ("El intento debe tener " ++ show (longitudObjetivo (objetivo j)) ++ " caracteres")
     | not (all esLetraValida intento) = Left "El intento contiene caracteres inválidos"
+    | not (validarPalabra j intento) = Left "La palabra ingresada es inválida"
     | otherwise = Right intento
     where 
       esLetraValida c = c >= 'A' && c <= 'Z'
