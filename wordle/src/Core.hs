@@ -12,7 +12,7 @@ data Match
   deriving (Eq, Show)
 
 match' :: String -> String -> [(Char, Match)]
-match' objetivo intento = compararLetras objetivo intento (aparicionesLetras objetivo)
+match' objetivo intento = compararLetras' objetivo intento (aparicionesLetras objetivo) 0
 
 compararLetras' :: String -> String -> [(Char, Int)] -> Int -> [(Char, Match)]
 compararLetras' _ [] _ _ = []   
@@ -33,22 +33,34 @@ evaluarLetra letra objetivo objetivoFreq idx
 
 
 match :: String -> String -> [(Char, Match)]
-match objetivo intento = compararLetras objetivo intento (aparicionesLetras objetivo)
+match _ [] = []
+match objetivo intento = -- compararLetras objetivo intento (aparicionesLetras objetivo)
+    let (resultadoParcial, frecuenciasRestantes) = marcarCorrectos objetivo intento (aparicionesLetras objetivo)
+    in marcarLIoNP resultadoParcial frecuenciasRestantes intento
 
-compararLetras :: String -> String -> [(Char, Int)] -> [(Char, Match)]
-compararLetras objetivo intento objetivoFreq = evaluarMatch objetivoFreq objetivo intento
+marcarCorrectos :: String -> String -> [(Char, Int)] -> ([(Char, Match)], [(Char, Int)])
+marcarCorrectos [] [] frecuencias = ([], frecuencias)   -- caso base
+marcarCorrectos (o : objetivo') (i : intento') frecuencias
+  | o == i =
+      let nuevasFrecuencias = actualizarFrecuencias frecuencias o
+          (resultado, frecuenciasActualizadas) = marcarCorrectos objetivo' intento' nuevasFrecuencias
+      in ((i, Correcto) : resultado, frecuenciasActualizadas)
+  | otherwise =
+      let (resultado, frecuencias') = marcarCorrectos objetivo' intento' frecuencias
+      in ((i, NoPertenece) : resultado, frecuencias')
 
-evaluarMatch :: [(Char, Int)] -> String -> String -> [(Char, Match)]
-evaluarMatch _ _ [] = []    -- caso base: si el intento es vacío
-evaluarMatch _ [] _ = []    -- caso base: no más letras para comparar
-evaluarMatch frecuencias (o : objetivo') (i : intento') =
-    if i == o
-        then (i, Correcto) : evaluarMatch frecuencias objetivo' intento'  -- caso 1: letra en la posición correcta
-        else 
-            let nuevasFrecuencias = actualizarFrecuencias frecuencias i
-            in if apariciones frecuencias i > 0
-                then (i, LugarIncorrecto) : evaluarMatch nuevasFrecuencias objetivo' intento'  -- caso 2: letra está en otro lugar
-                else (i, NoPertenece) : evaluarMatch frecuencias objetivo' intento'  -- caso 3: letra no pertenece a la palabra
+marcarLIoNP :: [(Char, Match)] -> [(Char, Int)] -> String -> [(Char, Match)]
+marcarLIoNP [] _ [] = []
+marcarLIoNP ((i, Correcto) : parcial') frecuencias (_ : intento') = (i, Correcto) : marcarLIoNP parcial' frecuencias intento'
+marcarLIoNP ((i, NoPertenece) : parcial') frecuencias (_ : intento') =
+    if apariciones frecuencias i > 0
+      then -- si la letra está presente, pero no en esta posición, y su frecuencia en el objetivo es > 0 -> LugarIncorrecto 
+          let nuevasFrecuencias = actualizarFrecuencias frecuencias i
+          in (i, LugarIncorrecto) : marcarLIoNP parcial' nuevasFrecuencias intento'
+      else
+        (i, NoPertenece) : marcarLIoNP parcial' frecuencias intento'
+marcarLIoNP _ _ _ = []
+
 
 aparicionesLetras :: String -> [(Char, Int)]
 aparicionesLetras "" = []
@@ -64,6 +76,7 @@ eliminarOcurrencias c xs = filter (not . (== c)) xs
 -- >>> aparicionesLetras "bomba" 
 -- [('b',2),('o',1),('m',1),('a',1)]
 
+
 actualizarFrecuencias :: [(Char, Int)] -> Char -> [(Char, Int)]
 actualizarFrecuencias [] _ = []
 actualizarFrecuencias ((c, n) : xs) char
@@ -78,7 +91,7 @@ apariciones ((c, n) : xs) char
   | otherwise = apariciones xs char
 
 -- >>> match "bomba" "bamba"
--- [('b',Correcto),('a',LugarIncorrecto),('m',Correcto),('b',Correcto),('a',Correcto)]
+-- [('b',Correcto),('a',NoPertenece),('m',Correcto),('b',Correcto),('a',Correcto)]
 
--- >>> match "polar" "bamba"
--- [('b',NoPertenece),('a',LugarIncorrecto),('m',NoPertenece),('b',NoPertenece),('a',NoPertenece)]
+-- >>> match "bijol" "bombo"
+-- [('b',Correcto),('o',LugarIncorrecto),('m',NoPertenece),('b',NoPertenece),('o',NoPertenece)]

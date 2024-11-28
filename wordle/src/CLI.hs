@@ -43,10 +43,10 @@ jugar estadoInicial =
               else mensajeError s,
             " ",
             "Palabra secreta: " ++  replicate (longitudObjetivo (objetivo (juego s))) '*',
-            "Intento actual: " ++ intentoActual s,
+            "Intento actual: " ++ renderIntentoActual (intentoActual s) (posicionActual s),
             "Jugar:",
             concatMap (const "+---") [1..longitudObjetivo (objetivo (juego s))] ++ "+",
-            unlines (map (`renderIntento` s) (obtenerIntentos (juego s))),
+            unlines (map (`renderJugada` s) (obtenerIntentos (juego s))),
             "Intentos restantes: " ++ show (intentosDisponibles (juego s)),
             " ",
             case estadoJuego (juego s) of
@@ -128,20 +128,22 @@ moverDer s =
 moverIzq :: State -> State
 moverIzq s = 
     if posicionActual s > 0
-        then s {posicionActual = (posicionActual s) + 1}
+        then s {posicionActual = (posicionActual s) - 1}
         else s
 
-renderIntento :: String -> State -> String
-renderIntento intento s = 
-    let posActual = posicionActual s
-        subrayada = ansiUnderline ++ [intento !! posActual] ++ ansiUnderlineOff
-        preSubrayada = take posActual intento
-        postSubrayada = drop (posActual + 1) intento
 
-        intentoSubrayado = preSubrayada ++ subrayada ++ postSubrayada
-        renderizado = map renderLetra (match (objetivo (juego s)) intentoSubrayado) -- map renderLetra: aplica renderLetra a cada (Char, Match) que devuelve match
+renderIntentoActual :: String -> Int -> String
+renderIntentoActual intento posActual =
+    if posActual < 0 || posActual >= length intento
+      then intento 
+      else
+        let subrayada = ansiUnderline ++ [intento !! posActual] ++ ansiUnderlineOff 
+        in take posActual intento ++ subrayada ++ drop (posActual + 1) intento
+
+renderJugada :: String -> State -> String
+renderJugada intento s = 
+    let renderizado = map renderLetra (match (objetivo (juego s)) intento) -- map renderLetra: aplica renderLetra a cada (Char, Match) que devuelve match
         letras = concat renderizado
-
         cantCasillas = longitudObjetivo (objetivo (juego s))
         casillas = concatMap (const "+---") [1..cantCasillas]
     in "| " ++ letras ++ "\n" ++ casillas ++ "+"
@@ -256,8 +258,7 @@ cargarEstado Nothing diccionario idx _ intentosTotales validarPalabra =
     }
 
 recuperarJuego :: State -> [String] -> State
-recuperarJuego s [] = s
-recuperarJuego s (i : intentos') = recuperarJuego (procesarIntento s i) intentos'
+recuperarJuego s intentos' = foldl procesarIntento s intentos'
 
 inicializarFija :: String -> Int -> (String -> Bool) -> State
 inicializarFija target intentosTotales validarPalabra = 
