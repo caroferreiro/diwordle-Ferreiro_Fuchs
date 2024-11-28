@@ -36,18 +36,19 @@ match :: String -> String -> [(Char, Match)]
 match objetivo intento = compararLetras objetivo intento (aparicionesLetras objetivo)
 
 compararLetras :: String -> String -> [(Char, Int)] -> [(Char, Match)]
-compararLetras objetivo intento objetivoFreq =
-  let resultadoPreliminar = zipWith (\i o -> if i == o then (i, Correcto) else (i, NoPertenece)) intento objetivo
-      letrasCorrectas = filter (\(_, info) -> info == Correcto) resultadoPreliminar
-      frecuenciasActualizadas = foldl actualizarFrecuencias objetivoFreq (map fst letrasCorrectas)
-  in zipWith (evaluarLugarIncorrecto frecuenciasActualizadas) resultadoPreliminar intento
+compararLetras objetivo intento objetivoFreq = evaluarMatch objetivoFreq objetivo intento
 
-evaluarLugarIncorrecto :: [(Char, Int)] -> (Char, Match) -> Char -> (Char, Match)
-evaluarLugarIncorrecto _ (letra, Correcto) _ = (letra, Correcto)
-evaluarLugarIncorrecto _ (letra, LugarIncorrecto) _ = (letra, LugarIncorrecto)
-evaluarLugarIncorrecto frecuencias (_, NoPertenece) letraIntento
-    | apariciones frecuencias letraIntento > 0 = (letraIntento, LugarIncorrecto)
-    | otherwise = (letraIntento, NoPertenece)
+evaluarMatch :: [(Char, Int)] -> String -> String -> [(Char, Match)]
+evaluarMatch _ _ [] = []    -- caso base: si el intento es vacío
+evaluarMatch _ [] _ = []    -- caso base: no más letras para comparar
+evaluarMatch frecuencias (o : objetivo') (i : intento') =
+    if i == o
+        then (i, Correcto) : evaluarMatch frecuencias objetivo' intento'  -- caso 1: letra en la posición correcta
+        else 
+            let nuevasFrecuencias = actualizarFrecuencias frecuencias i
+            in if apariciones frecuencias i > 0
+                then (i, LugarIncorrecto) : evaluarMatch nuevasFrecuencias objetivo' intento'  -- caso 2: letra está en otro lugar
+                else (i, NoPertenece) : evaluarMatch frecuencias objetivo' intento'  -- caso 3: letra no pertenece a la palabra
 
 aparicionesLetras :: String -> [(Char, Int)]
 aparicionesLetras "" = []
@@ -77,4 +78,7 @@ apariciones ((c, n) : xs) char
   | otherwise = apariciones xs char
 
 -- >>> match "bomba" "bamba"
--- [('b',Correcto),('a',NoPertenece),('m',Correcto),('b',Correcto),('a',Correcto)]
+-- [('b',Correcto),('a',LugarIncorrecto),('m',Correcto),('b',Correcto),('a',Correcto)]
+
+-- >>> match "polar" "bamba"
+-- [('b',NoPertenece),('a',LugarIncorrecto),('m',NoPertenece),('b',NoPertenece),('a',NoPertenece)]

@@ -17,10 +17,15 @@ ansiBgYellowColor = "\ESC[103m"
 ansiBgGreenColor = "\ESC[42m"
 ansiBgRedColor = "\ESC[41m"
 
+ansiUnderline, ansiUnderlineOff :: String
+ansiUnderline = "\ESC[4m"
+ansiUnderlineOff = "\ESC[24m"
+
 data State = State
     {
         juego :: Juego,
         intentoActual :: String,
+        posicionActual :: Int,
         letrasDescartadas :: [Char],
         mensajeError :: String,
         finalizar :: Bool
@@ -55,28 +60,27 @@ jugar estadoInicial =
             then (s, Exit)
           else case key of
             KEsc -> (s, Exit)
-            KEnter -> 
-              let nuevoEstado = procesarIntento s (intentoActual s)
-              in if finalizar nuevoEstado
-                then (nuevoEstado, Exit)
-                else (nuevoEstado, Continue)
+            KEnter -> (procesarIntento s (intentoActual s), Continue)
             KBS -> 
               if null (intentoActual s)
                 then (s, Continue)
-                else (chequearLetras s {intentoActual = init (intentoActual s)}, Continue)
-            KChar c -> ( chequearLetras s { intentoActual = intentoActual s ++ [toUpper c] }, Continue)
+                else if posicionActual s == length (intentoActual s)
+                  then (moverIzq (chequearLetras s {intentoActual = init (intentoActual s)}), Continue)
+                  else (chequearLetras s {intentoActual = init (intentoActual s)}, Continue)
+            KChar ' ' -> (hint s, Continue)
+            KChar c -> (chequearLetras (actualizarIntento s (toUpper c)), Continue)
+            KLeft -> (moverIzq s, Continue)
+            KRight -> (moverDer s, Continue)
             _ -> (s, Continue)
       }
 
-chequearLetras :: State -> State
-chequearLetras s =
-  let descartadas = filter (\c -> c `elem` letrasDescartadas s) (intentoActual s)
-  in if length descartadas == 1
-    then s {mensajeError = "La letra " ++ descartadas ++ " ya fue descartada"}
-    else 
-      if length descartadas > 1
-        then s {mensajeError = "Las letras " ++ intercalate ", " (map (: []) descartadas) ++ " ya fueron descartadas"}
-        else s {mensajeError = ""}
+actualizarIntento :: State -> Char -> State
+actualizarIntento s c = 
+    let intento = intentoActual s
+        posActual = posicionActual s
+    in if posActual == length intento
+      then moverDer (s {intentoActual = intentoActual s ++ [c]})
+      else s {intentoActual = take posActual intento ++ [c] ++ drop (posActual + 1) intento}
 
 procesarIntento :: State -> String -> State
 procesarIntento s palabra = 
@@ -94,10 +98,50 @@ agregarDescartada s =
       descartadas = filter (\letra -> not (letra `elem` map fst letrasObjetivo)) (intentoActual s)
   in letrasDescartadas s ++ descartadas
 
+chequearLetras :: State -> State
+chequearLetras s =
+  let descartadas = filter (\c -> c `elem` letrasDescartadas s) (intentoActual s)
+  in if length descartadas == 1
+    then s {mensajeError = "La letra " ++ descartadas ++ " ya fue descartada"}
+    else 
+      if length descartadas > 1
+        then s {mensajeError = "Las letras " ++ intercalate ", " (map (: []) descartadas) ++ " ya fueron descartadas"}
+        else s {mensajeError = ""}
+
+hint :: State -> State
+hint s =
+  let 
+      target = objetivo (juego s)
+      intentosLetras = concat (obtenerIntentos (juego s))
+      noAdivinadas = filter (`notElem` intentosLetras) target
+  in 
+    if not (null noAdivinadas)
+      then s {mensajeError = "Sugerencia: " ++ [head noAdivinadas]}
+      else s {mensajeError = "No hay más letras para sugerir."}
+
+moverDer :: State -> State
+moverDer s = 
+    if posicionActual s < length (intentoActual s)
+        then s {posicionActual = (posicionActual s) + 1}
+        else s
+
+moverIzq :: State -> State
+moverIzq s = 
+    if posicionActual s > 0
+        then s {posicionActual = (posicionActual s) + 1}
+        else s
+
 renderIntento :: String -> State -> String
 renderIntento intento s = 
-    let renderizado = map renderLetra (match (objetivo (juego s)) intento) -- map renderLetra: aplica renderLetra a cada (Char, Match) que devuelve match
+    let posActual = posicionActual s
+        subrayada = ansiUnderline ++ [intento !! posActual] ++ ansiUnderlineOff
+        preSubrayada = take posActual intento
+        postSubrayada = drop (posActual + 1) intento
+
+        intentoSubrayado = preSubrayada ++ subrayada ++ postSubrayada
+        renderizado = map renderLetra (match (objetivo (juego s)) intentoSubrayado) -- map renderLetra: aplica renderLetra a cada (Char, Match) que devuelve match
         letras = concat renderizado
+
         cantCasillas = longitudObjetivo (objetivo (juego s))
         casillas = concatMap (const "+---") [1..cantCasillas]
     in "| " ++ letras ++ "\n" ++ casillas ++ "+"
@@ -105,7 +149,7 @@ renderIntento intento s =
 renderLetra :: (Char, Match) -> String
 renderLetra (c, Correcto) = ansiBgGreenColor ++ [c] ++ ansiResetColor ++ " | "   -- Letra correcta y en la posición correcta
 renderLetra (c, LugarIncorrecto) = ansiBgYellowColor ++ [c] ++ ansiResetColor ++ " | "   -- Letra correcta en posición incorrecta
-renderLetra (c, NoPertenece) = ansiBgRedColor ++ [c] ++ ansiResetColor ++ " | "  -- Letra incorrectaaa
+renderLetra (c, NoPertenece) = ansiBgRedColor ++ [c] ++ ansiResetColor ++ " | "  -- Letra incorrecta
 
 
 main :: IO ()
@@ -168,6 +212,7 @@ inicializarRandom diccionario idx intentosTotales validarPalabra =
     { 
       juego = nuevo (obtenerPalabraRandom diccionario idx) intentosTotales validarPalabra,
       intentoActual = "",
+      posicionActual = 0,
       letrasDescartadas = [],
       mensajeError = "",
       finalizar = False
@@ -183,6 +228,7 @@ cargarEstado (Just archivo) diccionario idx fechaActual intentosTotales validarP
             { 
               juego = nuevo (objetivoAr archivo) intentosTotales validarPalabra,
               intentoActual = "",
+              posicionActual = 0,
               letrasDescartadas = [],
               mensajeError = "",
               finalizar = False
@@ -194,6 +240,7 @@ cargarEstado (Just archivo) diccionario idx fechaActual intentosTotales validarP
         { 
           juego = nuevo (obtenerPalabraRandom diccionario idx) intentosTotales validarPalabra,
           intentoActual = "",
+          posicionActual = 0,
           letrasDescartadas = [],
           mensajeError = "",
           finalizar = False
@@ -202,6 +249,7 @@ cargarEstado Nothing diccionario idx _ intentosTotales validarPalabra =
   State
     { juego = nuevo (obtenerPalabraRandom diccionario idx) intentosTotales validarPalabra,
       intentoActual = "",
+      posicionActual = 0,
       letrasDescartadas = [],
       mensajeError = "",
       finalizar = False
@@ -217,6 +265,7 @@ inicializarFija target intentosTotales validarPalabra =
     { 
       juego = nuevo target intentosTotales validarPalabra,
       intentoActual = "",
+      posicionActual = 0,
       letrasDescartadas = [],
       mensajeError = "",
       finalizar = False
