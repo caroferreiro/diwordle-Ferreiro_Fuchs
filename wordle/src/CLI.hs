@@ -54,10 +54,10 @@ jugar estadoInicial =
             case estadoJuego (juego s) of
                 Ganó -> let estadoActualizado = actualizarEstadisticas (estadisticas s) s
                             estadisticasActualizadas = estadisticas estadoActualizado
-                        in "¡Ganaste!" <> "\n" <> "Estadísticas:" <> "\n" <> renderEstadisticas estadisticasActualizadas
+                        in "¡Ganaste!" <> "\n" <> renderEstadisticas estadisticasActualizadas
                 Perdió -> let estadoActualizado = actualizarEstadisticas (estadisticas s) s
                               estadisticasActualizadas = estadisticas estadoActualizado
-                          in "Perdiste :(" <> "\n" <> "La palabra era: " ++ objetivo (juego s) <> "\n" <> "Estadísticas:" <> "\n" <> renderEstadisticas estadisticasActualizadas
+                          in "Perdiste :(" <> "\n" <> "La palabra era: " ++ objetivo (juego s) <> "\n" <> renderEstadisticas estadisticasActualizadas
                 EnProgreso -> ""
           ],
         update = \(Key key _) s ->
