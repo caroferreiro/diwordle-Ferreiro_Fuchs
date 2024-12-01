@@ -63,7 +63,8 @@ library
         Core,
         Wordle, 
         CLI,
-        ArchivoEstado
+        ArchivoEstado,
+        ArchivoEstadisticas
 
     -- Modules included in this library but not exported.
     -- other-modules:

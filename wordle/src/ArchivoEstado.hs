@@ -20,8 +20,8 @@ data EstadoJuego = EstadoJuego
 instance FromJSON EstadoJuego
 instance ToJSON EstadoJuego
 
-leerArchivo :: FilePath -> IO (Maybe EstadoJuego)
-leerArchivo archivo = do
+leerEstado :: FilePath -> IO (Maybe EstadoJuego)
+leerEstado archivo = do
   contenido <- catchIOError (B.readFile archivo) (\_ -> pure B.empty)
   pure (decode contenido)
 

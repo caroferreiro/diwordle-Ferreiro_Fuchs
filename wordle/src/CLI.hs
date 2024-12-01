@@ -7,7 +7,8 @@ import Wordle (Juego, Estado(..), objetivo, longitudObjetivo, realizarIntento, n
 import Data.Char (toUpper)
 import System.Random.Stateful (uniformRM, globalStdGen)
 import Data.List (intercalate)
-import ArchivoEstado (EstadoJuego(..), leerArchivo, guardarEstado)
+import ArchivoEstado (EstadoJuego(..), leerEstado, guardarEstado)
+import ArchivoEstadisticas (Estadisticas(..), leerEstadisticas, guardarEstadisticas, inicializarEstadisticas, promedioIntentos)
 import Data.Time (Day, getCurrentTime, getCurrentTimeZone, localDay, utcToLocalTime)
 import Data.Time.Format.ISO8601 (iso8601ParseM)
 
@@ -28,7 +29,8 @@ data State = State
         posicionActual :: Int,
         letrasDescartadas :: [Char],
         mensajeError :: String,
-        finalizar :: Bool
+        finalizar :: Bool,
+        estadisticas :: Estadisticas
     }
 
 jugar :: State -> Sandbox State
@@ -50,11 +52,14 @@ jugar estadoInicial =
             "Intentos restantes: " ++ show (intentosDisponibles (juego s)),
             " ",
             case estadoJuego (juego s) of
-                Ganó -> "¡Ganaste!"
-                Perdió -> "Perdiste :(" ++ "\n" ++  "La palabra era: " ++ objetivo (juego s)
+                Ganó -> let estadoActualizado = actualizarEstadisticas (estadisticas s) s
+                            estadisticasActualizadas = estadisticas estadoActualizado
+                        in "¡Ganaste!" <> "\n" <> "Estadísticas:" <> "\n" <> renderEstadisticas estadisticasActualizadas
+                Perdió -> let estadoActualizado = actualizarEstadisticas (estadisticas s) s
+                              estadisticasActualizadas = estadisticas estadoActualizado
+                          in "Perdiste :(" <> "\n" <> "La palabra era: " ++ objetivo (juego s) <> "\n" <> "Estadísticas:" <> "\n" <> renderEstadisticas estadisticasActualizadas
                 EnProgreso -> ""
           ],
-        
         update = \(Key key _) s ->
           if finalizar s  -- si el estado indica que el juego terminó, entonces se hace Exit
             then (s, Exit)
@@ -131,7 +136,22 @@ moverIzq s =
         then s {posicionActual = (posicionActual s) - 1}
         else s
 
+actualizarEstadisticas :: Estadisticas -> State -> State
+actualizarEstadisticas est s =
+    s { estadisticas =
+      Estadisticas 
+        {
+          partidasGanadas = partidasGanadas est + if gano then 1 else 0,
+          partidasPerdidas = partidasPerdidas est + if estadoJuego (juego s) == Perdió then 1 else 0,
+          intentosHastaGanar = if gano then intentosHastaGanar est ++ [intentos] else intentosHastaGanar est,
+          racha = if gano then racha est + 1 else 0
+        }
+    }
+    where 
+        gano = estadoJuego (juego s) == Ganó
+        intentos = length (obtenerIntentos (juego s))
 
+--
 renderIntentoActual :: String -> Int -> String
 renderIntentoActual intento posActual =
     if posActual < 0 || posActual >= length intento
@@ -153,29 +173,40 @@ renderLetra (c, Correcto) = ansiBgGreenColor ++ [c] ++ ansiResetColor ++ " | "  
 renderLetra (c, LugarIncorrecto) = ansiBgYellowColor ++ [c] ++ ansiResetColor ++ " | "   -- Letra correcta en posición incorrecta
 renderLetra (c, NoPertenece) = ansiBgRedColor ++ [c] ++ ansiResetColor ++ " | "  -- Letra incorrecta
 
+renderEstadisticas :: Estadisticas -> String
+renderEstadisticas est = unlines
+    [ "Estadísticas:",
+      "Juegos ganados: " ++ show (partidasGanadas est),
+      "Promedio de intentos hasta ganar: " ++ show (promedioIntentos (intentosHastaGanar est)),
+      "Juegos perdidos: " ++ show (partidasPerdidas est),
+      "Racha actual sin perder: " ++ show (racha est)
+    ]
 
+--
 main :: IO ()
 main = do
     args <- getArgs
     diccionario <- getDiccionario "diccionario.txt"
     idx <- uniformRM (0, length diccionario - 1) globalStdGen
     fechaActual <- getCurrentDay
-    estadoArchivo <- leerArchivo "estado.json"
+    estadoArchivo <- leerEstado "estado.json"
+    estadisticasArchivo <- leerEstadisticas "estadisticas.json"
 
     let intentosTotales = 6
-    --estado <- cargarEstado (leerArchivo "estado.json") args fechaActual diccionario idx intentosTotales
-
     let validarPalabra palabra = 
           case args of
             ("--palabra":_) -> True
             _ -> map toUpper palabra `elem` diccionario
 
-    let estado = parseArgs args estadoArchivo diccionario idx fechaActual intentosTotales validarPalabra
+    let estado = parseArgs args estadoArchivo diccionario idx fechaActual intentosTotales validarPalabra estadisticasArchivo
     s <- runInteractive' (jugar estado)
     --runInteractive (jugar palabra intentosTotales validarPalabra)
 
     let estadoFinal = EstadoJuego {fecha = fechaActual, objetivoAr = objetivo (juego s), intentosAr = obtenerIntentos (juego s), letrasDescartadasAr = letrasDescartadas s}
     guardarEstado args "estado.json" estadoFinal
+
+    let estadisticasActualizadas = estadisticas (actualizarEstadisticas (estadisticas s) s)
+    guardarEstadisticas args "estadisticas.json" estadisticasActualizadas
 
 getDiccionario :: FilePath -> IO [String]
 getDiccionario archivo = do
@@ -192,24 +223,24 @@ getCurrentDay = do
 parseDay :: String -> Maybe Day
 parseDay s = iso8601ParseM s
 
-parseArgs :: [String] -> Maybe EstadoJuego -> [String] -> Int -> Day -> Int -> (String -> Bool) -> State
-parseArgs args estadoArchivo diccionario idx fechaActual intentosTotales validarPalabra =
+parseArgs :: [String] -> Maybe EstadoJuego -> [String] -> Int -> Day -> Int -> (String -> Bool) -> Maybe Estadisticas -> State
+parseArgs args estadoArchivo diccionario idx fechaActual intentosTotales validarPalabra estadisticasArchivo =
     case args of
-      ["--daily"] -> cargarEstado estadoArchivo diccionario idx fechaActual intentosTotales validarPalabra
+      ["--daily"] -> cargarEstado estadoArchivo diccionario idx fechaActual intentosTotales validarPalabra estadisticasArchivo
       ("--daily":fechaStr:_) -> 
           case parseDay fechaStr of
               Just fechaIngresada -> 
                 if fechaIngresada == fechaActual
-                  then cargarEstado estadoArchivo diccionario idx fechaActual intentosTotales validarPalabra
-                  else error "La fecha ingresada no coincide con la fecha actual"
+                  then cargarEstado estadoArchivo diccionario idx fechaActual intentosTotales validarPalabra estadisticasArchivo
+                  else error "La fecha ingresada no coincide con la fecha actual" 
               Nothing -> error "Fecha inválida: usar formato YYYY-MM-DD."
-      ["--random"] -> inicializarRandom diccionario idx intentosTotales validarPalabra
-      ("--palabra":palabra:_) -> inicializarFija (map toUpper palabra) intentosTotales validarPalabra
-      [] -> cargarEstado estadoArchivo diccionario idx fechaActual intentosTotales validarPalabra
+      ["--random"] -> inicializarRandom diccionario idx intentosTotales validarPalabra estadisticasArchivo
+      ("--palabra":palabra:_) -> inicializarFija (map toUpper palabra) intentosTotales validarPalabra estadisticasArchivo
+      [] -> cargarEstado estadoArchivo diccionario idx fechaActual intentosTotales validarPalabra estadisticasArchivo
       _ -> error "Argumento invalido. Argumentos validos: --daily, --random, --palabra"
 
-inicializarRandom :: [String] -> Int -> Int -> (String -> Bool) -> State
-inicializarRandom diccionario idx intentosTotales validarPalabra = 
+inicializarRandom :: [String] -> Int -> Int -> (String -> Bool) -> Maybe Estadisticas -> State
+inicializarRandom diccionario idx intentosTotales validarPalabra estadisticasArchivo = 
   State
     { 
       juego = nuevo (obtenerPalabraRandom diccionario idx) intentosTotales validarPalabra,
@@ -217,11 +248,12 @@ inicializarRandom diccionario idx intentosTotales validarPalabra =
       posicionActual = 0,
       letrasDescartadas = [],
       mensajeError = "",
-      finalizar = False
+      finalizar = False,
+      estadisticas = inicializarEstadisticas estadisticasArchivo
     }
 
-cargarEstado :: Maybe EstadoJuego -> [String] -> Int -> Day -> Int -> (String -> Bool) -> State
-cargarEstado (Just archivo) diccionario idx fechaActual intentosTotales validarPalabra =
+cargarEstado :: Maybe EstadoJuego -> [String] -> Int -> Day -> Int -> (String -> Bool) -> Maybe Estadisticas -> State
+cargarEstado (Just archivo) diccionario idx fechaActual intentosTotales validarPalabra estadisticasArchivo =
   if fechaActual == fecha archivo
     then
       recuperarJuego 
@@ -231,9 +263,10 @@ cargarEstado (Just archivo) diccionario idx fechaActual intentosTotales validarP
               juego = nuevo (objetivoAr archivo) intentosTotales validarPalabra,
               intentoActual = "",
               posicionActual = 0,
-              letrasDescartadas = [],
+              letrasDescartadas = letrasDescartadasAr archivo,
               mensajeError = "",
-              finalizar = False
+              finalizar = False,
+              estadisticas = inicializarEstadisticas estadisticasArchivo
             }
         )
         (intentosAr archivo)
@@ -245,23 +278,25 @@ cargarEstado (Just archivo) diccionario idx fechaActual intentosTotales validarP
           posicionActual = 0,
           letrasDescartadas = [],
           mensajeError = "",
-          finalizar = False
+          finalizar = False,
+          estadisticas = inicializarEstadisticas estadisticasArchivo
         }
-cargarEstado Nothing diccionario idx _ intentosTotales validarPalabra =
+cargarEstado Nothing diccionario idx _ intentosTotales validarPalabra estadisticasArchivo =
   State
     { juego = nuevo (obtenerPalabraRandom diccionario idx) intentosTotales validarPalabra,
       intentoActual = "",
       posicionActual = 0,
       letrasDescartadas = [],
       mensajeError = "",
-      finalizar = False
+      finalizar = False,
+      estadisticas = inicializarEstadisticas estadisticasArchivo 
     }
 
 recuperarJuego :: State -> [String] -> State
 recuperarJuego s intentos' = foldl procesarIntento s intentos'
 
-inicializarFija :: String -> Int -> (String -> Bool) -> State
-inicializarFija target intentosTotales validarPalabra = 
+inicializarFija :: String -> Int -> (String -> Bool) -> Maybe Estadisticas -> State
+inicializarFija target intentosTotales validarPalabra estadisticasArchivo = 
   State
     { 
       juego = nuevo target intentosTotales validarPalabra,
@@ -269,7 +304,8 @@ inicializarFija target intentosTotales validarPalabra =
       posicionActual = 0,
       letrasDescartadas = [],
       mensajeError = "",
-      finalizar = False
+      finalizar = False,
+      estadisticas = inicializarEstadisticas estadisticasArchivo
     }
 
 obtenerPalabraRandom :: [String] -> Int -> String
